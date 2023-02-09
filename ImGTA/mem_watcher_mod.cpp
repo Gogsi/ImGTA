@@ -121,7 +121,7 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 	{
 		if (ImGui::InputInt("Hex Index##AddAddress", &m_inputAddressIndex, 1, 100, ImGuiInputTextFlags_CharsHexadecimal))
 		{
-			ClipInt(m_inputAddressIndex, 0, 999999);
+			ClipInt(m_inputAddressIndex, 0, INT32_MAX);
 			m_indexRange = 1;
 			m_inputsUpdated = true;
 		}
@@ -130,7 +130,7 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 	{
 		if (ImGui::InputInt("Decimal Index##AddAddress", &m_inputAddressIndex, 1, 100))
 		{
-			ClipInt(m_inputAddressIndex, 0, 999999);
+			ClipInt(m_inputAddressIndex, 0, INT32_MAX);
 			m_indexRange = 1;
 			m_inputsUpdated = true;
 		}

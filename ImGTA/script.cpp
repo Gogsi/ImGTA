@@ -76,9 +76,7 @@ void DLLObject::Update()
 	ResetTextDrawCount();
 	if (m_isOpen)
 	{
-		if (m_floatingMenu)
-			PAD::ENABLE_ALL_CONTROL_ACTIONS(0);
-		else
+		if (!m_floatingMenu)
 			PAD::DISABLE_ALL_CONTROL_ACTIONS(0);
 	}
 

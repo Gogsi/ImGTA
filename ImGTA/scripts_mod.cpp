@@ -287,22 +287,20 @@ bool ScriptsMod::Draw()
 		ImGui::Separator();
 	}
 
-	if (m_scripts.size() > 0)
+	for (auto& s : m_scripts)
 	{
-		for (auto &s : m_scripts)
+		//##s.m_handle prevents id conflicts (scripts with the same name)
+		if (ImGui::Selectable((s.m_scriptName + "##" + std::to_string(s.m_handle)).c_str(), false, ImGuiSelectableFlags_SpanAllColumns))
 		{
-			if (ImGui::Selectable(s.m_scriptName.c_str(), false, ImGuiSelectableFlags_SpanAllColumns))
-			{
-				m_selected = &s;
-				ImGui::OpenPopup("ScriptPropertiesPopup");
-			}
-			ImGui::NextColumn();
-
-			ImGui::Text("%d (0x%x)", s.m_handle, s.m_handle); ImGui::NextColumn();
+			m_selected = &s;
+			ImGui::OpenPopup("ScriptPropertiesPopup");
 		}
-		ImGui::Columns(1);
-		ImGui::Separator();
+		ImGui::NextColumn();
+
+		ImGui::Text("%d (0x%x)", s.m_handle, s.m_handle); ImGui::NextColumn();
 	}
+	ImGui::Columns(1);
+	ImGui::Separator();
 
 	ShowSelectedPopup();
 
