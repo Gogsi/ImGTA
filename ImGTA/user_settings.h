@@ -105,6 +105,7 @@ struct MemWatcherSettings {
 	bool sortByName = true;
 	bool inputHexIndex = false;
 	bool displayHudInfo = true;
+	bool saveGlobals = true;
 };
 
 struct MissionSettings {

@@ -31,6 +31,10 @@ protected:
 	void ShowAddAddress(bool isGlobal);
 	void ShowSelectedPopup();
 	void DrawMenuBar();
+	void SaveWatches();
+	void ClearSavedWatches();
+	void LoadWatches();
+	std::string GetMemWatchFilePath();
 	CommonSettings & GetCommonSettings() override { return m_settings.common; }
 
 	MemWatcherSettings m_settings;
@@ -55,6 +59,7 @@ protected:
 	bool m_inputsUpdated = false;
 	bool m_variableAlreadyWatched = false;
 	std::string m_onlineVersion = "";
+	std::string m_fileMemWatch = "Mem_Watch.json";
 };
 
 bool CompareWatch(WatchEntry a, WatchEntry b);

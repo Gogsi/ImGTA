@@ -23,17 +23,80 @@
 #include <algorithm>
 #include <bitset>
 
-const char *watchTypeNames[] = { "Int", "Float", "String", "Vector3", "Bitfield32" };
+const char* watchTypeNames[] = { "Int", "Float", "String", "Vector3", "Bitfield32" };
 
 void MemWatcherMod::Load()
 {
 	m_settings = m_dllObject.GetUserSettings().memWatcher;
 	m_onlineVersion = NETWORK::_GET_ONLINE_VERSION();
+	LoadWatches();
 }
 
 void MemWatcherMod::Unload()
 {
 	m_dllObject.GetUserSettings().memWatcher = m_settings;
+	SaveWatches();
+}
+
+std::string MemWatcherMod::GetMemWatchFilePath()
+{
+	return m_dllObject.m_settingsFolder + m_fileMemWatch;
+}
+
+json GetDefaultJson() {
+	json j{ {GetGameVersionString(), std::vector<WatchEntry>()} };
+	return j;
+}
+
+void MemWatcherMod::LoadWatches()
+{
+	std::ifstream f_in(GetMemWatchFilePath());
+	if (!f_in)
+	{
+		//create new file with default empty values
+		std::ofstream f_out(GetMemWatchFilePath());
+		f_out << GetDefaultJson();
+		f_in.open(GetMemWatchFilePath());
+	}
+	if (json::accept(f_in))
+	{
+		//reset stream
+		f_in.clear();
+		f_in.seekg(0);
+		//parse to m_watches
+		json j = json::parse(f_in);
+		m_watches = j.value(GetGameVersionString(), std::vector<WatchEntry>());
+	}
+}
+
+void MemWatcherMod::SaveWatches()
+{
+	if (m_settings.saveGlobals)
+	{
+		std::ifstream f_in(GetMemWatchFilePath());
+		std::ofstream f_out(GetMemWatchFilePath());
+		json jsonNew{ { GetGameVersionString(), m_watches } };
+		if (json::accept(f_in))
+		{
+			f_in.clear();
+			f_in.seekg(0);
+			//get previous json data and update with the current one to 
+			//prevent losing watches for other game versions
+			json jsonOld = json::parse(f_in);
+			jsonOld.update(jsonNew);
+			f_out << jsonOld;
+		}
+		else {
+			//fail safe if user fucked the json
+			f_out << jsonNew;
+		}
+	}
+}
+
+void MemWatcherMod::ClearSavedWatches()
+{
+	std::ofstream f_out(GetMemWatchFilePath());
+	f_out << GetDefaultJson();
 }
 
 void MemWatcherMod::Think()
@@ -54,12 +117,12 @@ void MemWatcherMod::Think()
 			m_scriptRunning = false;
 
 		const float step = 1.2f * TextFontHeight(m_settings.common.inGameFontSize, m_font);
-		const char * strFormat = m_settings.inputHexIndex ? "%s%s (0x%x) %s: %s" : "%s%s (%d) %s: %s";
+		const char* strFormat = m_settings.inputHexIndex ? "%s%s (0x%x) %s: %s" : "%s%s (%d) %s: %s";
 		std::string bufferLines;
 		const int bufferLinesCount = 2;
 		int i = 0;
 		yOff -= step * (bufferLinesCount - 1);
-		for (auto &w : m_watches)
+		for (auto& w : m_watches)
 		{
 			// Re-check if script is still running
 			if (!w.IsGlobal())
@@ -69,9 +132,9 @@ void MemWatcherMod::Think()
 				else
 					w.m_scriptRunning = false;
 			}
-			
+
 			w.UpdateValue();
-			
+
 			if (m_dllObject.GetEnableHUD() && m_settings.common.showInGame && w.m_showInGame)
 			{
 				if (i % bufferLinesCount == 0)
@@ -79,11 +142,11 @@ void MemWatcherMod::Think()
 
 				std::string infoDetail = (m_settings.displayHudInfo && w.m_info.size() > 0) ? (" (" + w.m_info + ")") : "";
 				std::snprintf(buf, sizeof(buf), strFormat,
-							  w.m_scriptRunning ? "" : "(STOPPED) ",
-							  w.m_scriptName.c_str(),
-							  w.m_addressIndex,
-							  infoDetail.c_str(),
-							  w.m_value.c_str());
+					w.m_scriptRunning ? "" : "(STOPPED) ",
+					w.m_scriptName.c_str(),
+					w.m_addressIndex,
+					infoDetail.c_str(),
+					w.m_value.c_str());
 				bufferLines += std::string(buf) + "\n";
 
 				if (i % bufferLinesCount == (bufferLinesCount - 1))
@@ -138,7 +201,7 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 
 	if (ImGui::InputInt("Range size##AddAddress", &m_indexRange))
 		ClipInt(m_indexRange, 1, 100);
-	
+
 	if (ImGui::Combo("Type##AddAddress", &m_inputType, watchTypeNames, IM_ARRAYSIZE(watchTypeNames)))
 		m_inputsUpdated = true;
 
@@ -148,13 +211,13 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 		{
 			m_scriptName = std::string(m_scriptNameBuf);
 			m_dllObject.RunOnNativeThread([&]
-			{
-				m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
-				if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
-					m_scriptRunning = true;
-				else
-					m_scriptRunning = false;
-			});
+				{
+					m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
+					if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
+						m_scriptRunning = true;
+					else
+						m_scriptRunning = false;
+				});
 			m_inputsUpdated = true;
 		}
 	}
@@ -185,7 +248,7 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 				// Check if the address is already watched
 				int tmpScriptHash = isGlobal ? 0 : m_scriptHash;
 				m_variableAlreadyWatched = false;
-				for (const auto & watch : m_watches)
+				for (const auto& watch : m_watches)
 				{
 					if (watch.m_addressIndex == m_inputAddressIndex
 						&& watch.m_scriptHash == tmpScriptHash
@@ -233,7 +296,7 @@ void MemWatcherMod::ShowSelectedPopup()
 {
 	if (ImGui::BeginPopup("PopupEntryProperties"))
 	{
-		ImGui::Combo("Type##EntryProperties", (int *)&m_selectedEntry->m_type, watchTypeNames, IM_ARRAYSIZE(watchTypeNames));
+		ImGui::Combo("Type##EntryProperties", (int*)&m_selectedEntry->m_type, watchTypeNames, IM_ARRAYSIZE(watchTypeNames));
 		ImGui::Checkbox("Show Ingame##EntryProperties", &m_selectedEntry->m_showInGame);
 
 
@@ -242,7 +305,7 @@ void MemWatcherMod::ShowSelectedPopup()
 		else if (std::string(m_watchInfoModifyBuf) != m_selectedEntry->m_info)
 			strncpy_s(m_watchInfoModifyBuf, sizeof(m_watchInfoModifyBuf), m_selectedEntry->m_info.c_str(), sizeof(m_watchInfoModifyBuf));
 
-		uint64_t * val = nullptr;
+		uint64_t* val = nullptr;
 		if (m_selectedEntry->IsGlobal())
 		{
 			val = GetGlobalPtr(m_selectedEntry->m_addressIndex);
@@ -255,13 +318,13 @@ void MemWatcherMod::ShowSelectedPopup()
 			{
 				m_scriptName = std::string(m_scriptNameBuf);
 				m_dllObject.RunOnNativeThread([&]
-				{
-					m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
-					if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
-						m_selectedWatchScriptRunning = true;
-					else
-						m_selectedWatchScriptRunning = false;
-				});
+					{
+						m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
+						if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
+							m_selectedWatchScriptRunning = true;
+						else
+							m_selectedWatchScriptRunning = false;
+					});
 			}
 
 			if (m_selectedWatchScriptRunning)
@@ -314,6 +377,7 @@ void MemWatcherMod::ShowSelectedPopup()
 
 void MemWatcherMod::DrawMenuBar()
 {
+	bool openPopup = false;
 	if (ImGui::BeginMenuBar())
 	{
 		if (ImGui::BeginMenu("Watch"))
@@ -340,7 +404,28 @@ void MemWatcherMod::DrawMenuBar()
 				m_watches.clear();
 			}
 
+			if (ImGui::MenuItem("Clear JSON"))
+				openPopup = true;
+
 			ImGui::EndMenu();
+		}
+
+		//https://github.com/ocornut/imgui/issues/331#issuecomment-140055181
+		if (openPopup)
+			ImGui::OpenPopup("Are you sure?");
+
+		if (ImGui::BeginPopupModal("Are you sure?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("Are you sure you want to clear JSON?");
+			if (ImGui::Button("Yes"))
+			{
+				ClearSavedWatches();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("No"))
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
 		}
 
 		ImGui::Separator();
@@ -353,9 +438,10 @@ void MemWatcherMod::DrawMenuBar()
 			ImGui::Separator();
 			ImGui::MenuItem("Hexadecimal index", NULL, &m_settings.inputHexIndex);
 			ImGui::MenuItem("Display information detail", NULL, &m_settings.displayHudInfo);
-			
+
 			ImGui::EndMenu();
 		}
+		ImGui::Checkbox("Save to JSON", &m_settings.saveGlobals);
 
 		ImGui::EndMenuBar();
 	}
@@ -368,11 +454,11 @@ bool MemWatcherMod::Draw()
 
 	ImGui::SetWindowFontScale(m_settings.common.contentFontSize);
 	ImGui::TextColored(ImVec4(255, 0, 0, 255), "Game online version: %s. "
-					   "Variable indexes are dependent on the game version.", m_onlineVersion.c_str());
+		"Variable indexes are dependent on the game version.", m_onlineVersion.c_str());
 
 	char buf[112] = "";
-	const char * indexFormat = m_settings.inputHexIndex ? "0x%x##%d%d" : "%d##%d%d";
-	
+	const char* indexFormat = m_settings.inputHexIndex ? "0x%x##%d%d" : "%d##%d%d";
+
 	ImGui::Columns(5);
 	ImGui::Separator();
 	ImGui::Text("Index"); ImGui::NextColumn();
@@ -385,7 +471,7 @@ bool MemWatcherMod::Draw()
 	m_watchesMutex.lock();
 	if (m_watches.size() > 0)
 	{
-		for (auto &w : m_watches)
+		for (auto& w : m_watches)
 		{
 			std::snprintf(buf, sizeof(buf), indexFormat, w.m_addressIndex, w.m_addressIndex, w.m_scriptHash, w.m_type);
 

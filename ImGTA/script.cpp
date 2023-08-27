@@ -184,7 +184,6 @@ void DLLObject::Load()
 	while (true)
 	{
 		Update();
-		m_lastGameTime = std::chrono::high_resolution_clock::now();
 		WAIT(0);
 	}
 }
@@ -247,7 +246,6 @@ void DLLObject::OnPresent(IDXGISwapChain *swap)
 		HWND window = FindMainWindow(GetCurrentProcessId());
 		ImGui_ImplWin32_Init(window);
 		ImGui_ImplDX11_Init(device, context);
-
 
 		m_oldProc = SetWindowLongPtr(window, GWLP_WNDPROC, (LONG_PTR)WndProc);
 	}

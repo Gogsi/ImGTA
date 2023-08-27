@@ -300,5 +300,6 @@
     <None Include="lua_engine.h">
       <Filter>Header Files</Filter>
     </None>
+    <None Include="cpp.hint" />
   </ItemGroup>
 </Project>

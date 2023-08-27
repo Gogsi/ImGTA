@@ -42,7 +42,6 @@ public:
 	void PassCurrentMission();
 	void OnPresent(IDXGISwapChain *swap);
 	
-	std::chrono::time_point<std::chrono::high_resolution_clock> GetLastGameTime() { return m_lastGameTime; }
 	std::string GetSettingsFolder() { return m_settingsFolder; }
 	bool HasInitializedImGui() { return m_hasInitializedImgui; }
 	LONG_PTR GetOldProc() { return m_oldProc; }
@@ -56,10 +55,9 @@ public:
 	bool GetEnableHUD() { return m_enableHUD; }
 	bool m_updatedPauseMenuOn = false;
 	bool m_updatedPauseMenuOff = false;
-	bool m_timerThreadAlive = false;
+	std::string m_settingsFolder = "ImGTA/";
 
 private:
-	std::string m_settingsFolder = "ImGTA/";
 	std::string m_fileImGuiIni = m_settingsFolder + "Settings_imgui.ini";
 	std::string m_fileImGuiLog = m_settingsFolder + "Log_imgui.txt";
 	std::string m_userSettingsFile = m_settingsFolder + "Settings_HUD.ini";
@@ -72,8 +70,6 @@ private:
 	bool m_isLoaded = false;
 	bool m_floatingMenu = false;
 	bool m_enableHUD = true;
-	std::chrono::time_point<std::chrono::high_resolution_clock> m_lastGameTime;
-	std::thread m_timerThread;
 
 	// TODO: Update this bad design for ON/OFF
 	bool m_updatedTextDrawMaxWarningOn = false;

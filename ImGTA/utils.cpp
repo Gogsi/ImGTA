@@ -161,6 +161,10 @@ bool InitThreadBasket()
 		return false;
 }
 
+std::string GetGameVersionString() {
+	return std::to_string(getGameVersion());
+}
+
 uint64_t* GetThreadAddress(int localId, int scriptHash)
 {
 	if (localId < 0 || scriptHash == 0)
