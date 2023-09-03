@@ -114,7 +114,7 @@ copy "$(SolutionDir)lua\lua53.dll" "E:\Grand Theft Auto V"</Command>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\ScriptHookV_SDK\inc\;$(SolutionDir)Libraries\imgui\;$(SolutionDir)Libraries\imgui\backends\;$(SolutionDir)Libraries\lua\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\ScriptHookV_SDK\inc\;$(SolutionDir)Libraries\imgui\;$(SolutionDir)Libraries\imgui\backends\;$(SolutionDir)Libraries\json;$(SolutionDir)Libraries\lua\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShowIncludes>
       </ShowIncludes>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -161,7 +161,7 @@ copy "$(SolutionDir)lua\lua53.dll" "E:\Grand Theft Auto V"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\ScriptHookV_SDK\inc\;$(SolutionDir)Libraries\imgui\;$(SolutionDir)Libraries\imgui\backends\;$(SolutionDir)Libraries\lua\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\ScriptHookV_SDK\inc\;$(SolutionDir)Libraries\imgui\;$(SolutionDir)Libraries\imgui\backends\;$(SolutionDir)Libraries\lua\include\;$(SolutionDir)Libraries\json;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -260,6 +260,7 @@ copy "$(SolutionDir)Build\$(Platform)\$(Configuration)\$(TargetName)$(TargetExt)
     <ClInclude Include="widgets.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cpp.hint" />
     <None Include="lua_engine.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -23,17 +23,80 @@
 #include <algorithm>
 #include <bitset>
 
-const char *watchTypeNames[] = { "Int", "Float", "String", "Vector3", "Bitfield32" };
+const char* watchTypeNames[] = { "Int", "Float", "String", "Vector3", "Bitfield32", "Array" };
 
 void MemWatcherMod::Load()
 {
 	m_settings = m_dllObject.GetUserSettings().memWatcher;
 	m_onlineVersion = NETWORK::_GET_ONLINE_VERSION();
+	LoadWatches();
 }
 
 void MemWatcherMod::Unload()
 {
 	m_dllObject.GetUserSettings().memWatcher = m_settings;
+	SaveWatches();
+}
+
+std::string MemWatcherMod::GetMemWatchFilePath()
+{
+	return m_dllObject.m_settingsFolder + m_fileMemWatch;
+}
+
+json GetDefaultJson() {
+	json j{ {GetGameVersionString(), std::vector<WatchEntry>()} };
+	return j;
+}
+
+void MemWatcherMod::LoadWatches()
+{
+	std::ifstream f_in(GetMemWatchFilePath());
+	if (!f_in)
+	{
+		//create new file with default empty values
+		std::ofstream f_out(GetMemWatchFilePath());
+		f_out << GetDefaultJson();
+		f_in.open(GetMemWatchFilePath());
+	}
+	if (json::accept(f_in))
+	{
+		//reset stream
+		f_in.clear();
+		f_in.seekg(0);
+		//parse to m_watches
+		json j = json::parse(f_in);
+		m_watches = j.value(GetGameVersionString(), std::vector<WatchEntry>());
+	}
+}
+
+void MemWatcherMod::SaveWatches()
+{
+	if (m_settings.saveGlobals)
+	{
+		std::ifstream f_in(GetMemWatchFilePath());
+		std::ofstream f_out(GetMemWatchFilePath());
+		json jsonNew{ { GetGameVersionString(), m_watches } };
+		if (json::accept(f_in))
+		{
+			f_in.clear();
+			f_in.seekg(0);
+			//get previous json data and update with the current one to 
+			//prevent losing watches for other game versions
+			json jsonOld = json::parse(f_in);
+			jsonOld.update(jsonNew);
+			f_out << jsonOld;
+		}
+		else {
+			//fail safe if user fucked the json
+			f_out << jsonNew;
+		}
+	}
+}
+
+void MemWatcherMod::ClearSavedWatches()
+{
+	std::ofstream f_out(GetMemWatchFilePath());
+	f_out << GetDefaultJson();
 }
 
 void MemWatcherMod::Think()
@@ -42,9 +105,8 @@ void MemWatcherMod::Think()
 	{
 		std::lock_guard<std::mutex> lock(m_watchesMutex);
 
-		char buf[112] = "";
-		float xOff = m_settings.common.inGameOffsetX;
-		float yOff = m_settings.common.inGameOffsetY;
+		xOff = m_settings.common.inGameOffsetX;
+		yOff = m_settings.common.inGameOffsetY;
 
 		m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
 		// Check if script is still running
@@ -53,13 +115,10 @@ void MemWatcherMod::Think()
 		else
 			m_scriptRunning = false;
 
-		const float step = 1.2f * TextFontHeight(m_settings.common.inGameFontSize, m_font);
-		const char * strFormat = m_settings.inputHexIndex ? "%s%s (0x%x) %s: %s" : "%s%s (%d) %s: %s";
-		std::string bufferLines;
-		const int bufferLinesCount = 2;
-		int i = 0;
+		step = 1.2f * TextFontHeight(m_settings.common.inGameFontSize, m_font);
+		linesCount = 0;
 		yOff -= step * (bufferLinesCount - 1);
-		for (auto &w : m_watches)
+		for (auto& w : m_watches)
 		{
 			// Re-check if script is still running
 			if (!w.IsGlobal())
@@ -69,44 +128,59 @@ void MemWatcherMod::Think()
 				else
 					w.m_scriptRunning = false;
 			}
-			
+
 			w.UpdateValue();
-			
+
 			if (m_dllObject.GetEnableHUD() && m_settings.common.showInGame && w.m_showInGame)
 			{
-				if (i % bufferLinesCount == 0)
-					bufferLines = "";
+				DrawWatchToScreen(w, w.m_addressIndex, "");
 
-				std::string infoDetail = (m_settings.displayHudInfo && w.m_info.size() > 0) ? (" (" + w.m_info + ")") : "";
-				std::snprintf(buf, sizeof(buf), strFormat,
-							  w.m_scriptRunning ? "" : "(STOPPED) ",
-							  w.m_scriptName.c_str(),
-							  w.m_addressIndex,
-							  infoDetail.c_str(),
-							  w.m_value.c_str());
-				bufferLines += std::string(buf) + "\n";
-
-				if (i % bufferLinesCount == (bufferLinesCount - 1))
-					DrawTextToScreen(bufferLines.c_str(), xOff, yOff, m_settings.common.inGameFontSize, m_font, false, m_settings.common.inGameFontRed, m_settings.common.inGameFontGreen, m_settings.common.inGameFontBlue);
-
-				// Change column
-				if (i % 30 == 29)
-				{
-					xOff += (m_settings.common.columnSpacing + step);
-					yOff -= step * 30;
+				int index = 0;
+				for (auto& arrayWatch : w.m_arrayWatches) {
+					if (arrayWatch.m_showInGame)
+					{
+						std::string memberIndex = w.m_arrayIndexInItem > 0 ? ".f_" + std::to_string(w.m_arrayIndexInItem) : "";
+						DrawWatchToScreen(arrayWatch, w.m_addressIndex, ("[" + std::to_string(index) + "]" + memberIndex).c_str());
+						index++;
+					}
 				}
-
-				yOff += step;
-				i++;
 			}
 		}
 		if (m_dllObject.GetEnableHUD() && m_settings.common.showInGame)
 		{
-			if (i % bufferLinesCount == (bufferLinesCount - 1))
+			if (linesCount % bufferLinesCount == (bufferLinesCount - 1))
 				DrawTextToScreen(bufferLines.c_str(), xOff, yOff, m_settings.common.inGameFontSize, m_font, false, m_settings.common.inGameFontRed, m_settings.common.inGameFontGreen, m_settings.common.inGameFontBlue);
 		}
 
 	}
+}
+
+void MemWatcherMod::DrawWatchToScreen(WatchEntry w, int addressIndex, std::string watchText) {
+	if (linesCount % bufferLinesCount == 0)
+		bufferLines = "";
+
+	std::string infoDetail = (m_settings.displayHudInfo && w.m_info.size() > 0) ? (" (" + w.m_info + ")") : "";
+	std::snprintf(watchOnScreenInfoBuf, sizeof(watchOnScreenInfoBuf), strFormat,
+		w.m_scriptRunning ? "" : "(STOPPED) ",
+		w.m_scriptName.c_str(),
+		addressIndex,
+		watchText,
+		infoDetail.c_str(),
+		w.m_value.c_str());
+	bufferLines += std::string(watchOnScreenInfoBuf) + "\n";
+
+	if (linesCount % bufferLinesCount == (bufferLinesCount - 1))
+		DrawTextToScreen(bufferLines.c_str(), xOff, yOff, m_settings.common.inGameFontSize, m_font, false, m_settings.common.inGameFontRed, m_settings.common.inGameFontGreen, m_settings.common.inGameFontBlue);
+
+	// Change column
+	if (linesCount % 30 == 29)
+	{
+		xOff += (m_settings.common.columnSpacing + step);
+		yOff -= step * 30;
+	}
+
+	yOff += step;
+	linesCount++;
 }
 
 void MemWatcherMod::SortWatches()
@@ -138,9 +212,21 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 
 	if (ImGui::InputInt("Range size##AddAddress", &m_indexRange))
 		ClipInt(m_indexRange, 1, 100);
-	
+
 	if (ImGui::Combo("Type##AddAddress", &m_inputType, watchTypeNames, IM_ARRAYSIZE(watchTypeNames)))
 		m_inputsUpdated = true;
+
+	if (m_inputType == kArray)
+	{
+		if (ImGui::Combo("Array Item Type##AddAddress", &m_inputArrayItemType, watchTypeNames, IM_ARRAYSIZE(watchTypeNames)))
+			m_inputsUpdated = true;
+
+		if (ImGui::InputInt("Item Size QWORD##AddAddress", &m_inputItemSizeQWORD, 1, 100))
+			m_inputsUpdated = true;
+
+		if (ImGui::InputInt("Index in Item##AddAddress", &m_inputIndexInItem, 1, 100))
+			m_inputsUpdated = true;
+	}
 
 	if (!isGlobal)
 	{
@@ -148,13 +234,13 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 		{
 			m_scriptName = std::string(m_scriptNameBuf);
 			m_dllObject.RunOnNativeThread([&]
-			{
-				m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
-				if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
-					m_scriptRunning = true;
-				else
-					m_scriptRunning = false;
-			});
+				{
+					m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
+					if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
+						m_scriptRunning = true;
+					else
+						m_scriptRunning = false;
+				});
 			m_inputsUpdated = true;
 		}
 	}
@@ -185,7 +271,7 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 				// Check if the address is already watched
 				int tmpScriptHash = isGlobal ? 0 : m_scriptHash;
 				m_variableAlreadyWatched = false;
-				for (const auto & watch : m_watches)
+				for (const auto& watch : m_watches)
 				{
 					if (watch.m_addressIndex == m_inputAddressIndex
 						&& watch.m_scriptHash == tmpScriptHash
@@ -201,9 +287,9 @@ void MemWatcherMod::ShowAddAddress(bool isGlobal)
 					for (int i = 0; i < m_indexRange; i++)
 					{
 						if (isGlobal)
-							m_watches.push_back(WatchEntry(m_inputAddressIndex + i, (WatchType)m_inputType, "Global", 0, m_watchInfo));
+							m_watches.push_back(WatchEntry(m_inputAddressIndex + i, (WatchType)m_inputType, (WatchType)m_inputArrayItemType, "Global", 0, m_watchInfo, m_inputItemSizeQWORD, m_inputIndexInItem));
 						else
-							m_watches.push_back(WatchEntry(m_inputAddressIndex + i, (WatchType)m_inputType, m_scriptName, m_scriptHash, m_watchInfo));
+							m_watches.push_back(WatchEntry(m_inputAddressIndex + i, (WatchType)m_inputType, (WatchType)m_inputArrayItemType, m_scriptName, m_scriptHash, m_watchInfo, m_inputItemSizeQWORD, m_inputIndexInItem));
 					}
 					m_autoScrollDown = true;
 				}
@@ -233,16 +319,41 @@ void MemWatcherMod::ShowSelectedPopup()
 {
 	if (ImGui::BeginPopup("PopupEntryProperties"))
 	{
-		ImGui::Combo("Type##EntryProperties", (int *)&m_selectedEntry->m_type, watchTypeNames, IM_ARRAYSIZE(watchTypeNames));
+		if (!m_selectedEntry->m_isArrayItem)
+		{
+			if (ImGui::Combo("Type##EntryProperties", (int*)&m_selectedEntry->m_type, watchTypeNames, IM_ARRAYSIZE(watchTypeNames)))
+			{
+				if (m_selectedEntry->m_type != kArray)
+					m_selectedEntry->m_arrayWatches.clear();
+			}
+		}
 		ImGui::Checkbox("Show Ingame##EntryProperties", &m_selectedEntry->m_showInGame);
 
-
-		if (ImGui::InputText("Info##AddAddress", m_watchInfoModifyBuf, sizeof(m_watchInfoModifyBuf)))
+		if (ImGui::InputText("Info##EntryProperties", m_watchInfoModifyBuf, sizeof(m_watchInfoModifyBuf)))
 			m_selectedEntry->m_info = std::string(m_watchInfoModifyBuf);
 		else if (std::string(m_watchInfoModifyBuf) != m_selectedEntry->m_info)
 			strncpy_s(m_watchInfoModifyBuf, sizeof(m_watchInfoModifyBuf), m_selectedEntry->m_info.c_str(), sizeof(m_watchInfoModifyBuf));
 
-		uint64_t * val = nullptr;
+		if (m_selectedEntry->m_type == kArray)
+		{
+			if (ImGui::InputInt("Index In Item##EntryProperties", &m_selectedEntry->m_arrayIndexInItem) ||
+				//same types but without array, no nesting arrays
+				ImGui::Combo("Array Item Type##EntryProperties", (int*)&m_selectedEntry->m_arrayItemType, watchTypeNames, IM_ARRAYSIZE(watchTypeNames) - 1) ||
+				ImGui::InputInt("Item Size QWORD##EntryProperties", &m_selectedEntry->m_itemSizeQWORD, 1, 100))
+			{
+				//update sub watches
+				int index = 0;
+				for (auto& watch : m_selectedEntry->m_arrayWatches)
+				{
+					watch.m_addressIndex = m_selectedEntry->m_addressIndex + 1 + index * m_selectedEntry->m_itemSizeQWORD + m_selectedEntry->m_arrayIndexInItem;
+					watch.m_type = m_selectedEntry->m_arrayItemType;
+					index++;
+				}
+			}
+
+		}
+
+		uint64_t* val = nullptr;
 		if (m_selectedEntry->IsGlobal())
 		{
 			val = GetGlobalPtr(m_selectedEntry->m_addressIndex);
@@ -255,13 +366,13 @@ void MemWatcherMod::ShowSelectedPopup()
 			{
 				m_scriptName = std::string(m_scriptNameBuf);
 				m_dllObject.RunOnNativeThread([&]
-				{
-					m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
-					if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
-						m_selectedWatchScriptRunning = true;
-					else
-						m_selectedWatchScriptRunning = false;
-				});
+					{
+						m_scriptHash = MISC::GET_HASH_KEY(m_scriptName.c_str());
+						if (SCRIPT::_GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(m_scriptHash) > 0)
+							m_selectedWatchScriptRunning = true;
+						else
+							m_selectedWatchScriptRunning = false;
+					});
 			}
 
 			if (m_selectedWatchScriptRunning)
@@ -301,11 +412,14 @@ void MemWatcherMod::ShowSelectedPopup()
 			}
 		}
 
-		if (ImGui::Button("Remove##EntryProperties"))
+		if (!m_selectedEntry->m_isArrayItem)
 		{
-			std::lock_guard<std::mutex> lock(m_watchesMutex);
-			m_watches.erase(std::remove(m_watches.begin(), m_watches.end(), m_selectedEntry), m_watches.end());
-			ImGui::CloseCurrentPopup();
+			if (ImGui::Button("Remove##EntryProperties"))
+			{
+				std::lock_guard<std::mutex> lock(m_watchesMutex);
+				m_watches.erase(std::remove(m_watches.begin(), m_watches.end(), m_selectedEntry), m_watches.end());
+				ImGui::CloseCurrentPopup();
+			}
 		}
 
 		ImGui::EndPopup();
@@ -314,6 +428,7 @@ void MemWatcherMod::ShowSelectedPopup()
 
 void MemWatcherMod::DrawMenuBar()
 {
+	bool openPopup = false;
 	if (ImGui::BeginMenuBar())
 	{
 		if (ImGui::BeginMenu("Watch"))
@@ -340,7 +455,28 @@ void MemWatcherMod::DrawMenuBar()
 				m_watches.clear();
 			}
 
+			if (ImGui::MenuItem("Clear JSON"))
+				openPopup = true;
+
 			ImGui::EndMenu();
+		}
+
+		//https://github.com/ocornut/imgui/issues/331#issuecomment-140055181
+		if (openPopup)
+			ImGui::OpenPopup("Are you sure?");
+
+		if (ImGui::BeginPopupModal("Are you sure?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("Are you sure you want to clear JSON?");
+			if (ImGui::Button("Yes"))
+			{
+				ClearSavedWatches();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("No"))
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
 		}
 
 		ImGui::Separator();
@@ -353,9 +489,10 @@ void MemWatcherMod::DrawMenuBar()
 			ImGui::Separator();
 			ImGui::MenuItem("Hexadecimal index", NULL, &m_settings.inputHexIndex);
 			ImGui::MenuItem("Display information detail", NULL, &m_settings.displayHudInfo);
-			
+
 			ImGui::EndMenu();
 		}
+		ImGui::Checkbox("Save to JSON", &m_settings.saveGlobals);
 
 		ImGui::EndMenuBar();
 	}
@@ -368,11 +505,11 @@ bool MemWatcherMod::Draw()
 
 	ImGui::SetWindowFontScale(m_settings.common.contentFontSize);
 	ImGui::TextColored(ImVec4(255, 0, 0, 255), "Game online version: %s. "
-					   "Variable indexes are dependent on the game version.", m_onlineVersion.c_str());
+		"Variable indexes are dependent on the game version.", m_onlineVersion.c_str());
 
 	char buf[112] = "";
-	const char * indexFormat = m_settings.inputHexIndex ? "0x%x##%d%d" : "%d##%d%d";
-	
+	const char* indexFormat = m_settings.inputHexIndex ? "0x%x%s##%d%d" : "%d%s##%d%d";
+
 	ImGui::Columns(5);
 	ImGui::Separator();
 	ImGui::Text("Index"); ImGui::NextColumn();
@@ -385,21 +522,30 @@ bool MemWatcherMod::Draw()
 	m_watchesMutex.lock();
 	if (m_watches.size() > 0)
 	{
-		for (auto &w : m_watches)
+		for (auto& w : m_watches)
 		{
-			std::snprintf(buf, sizeof(buf), indexFormat, w.m_addressIndex, w.m_addressIndex, w.m_scriptHash, w.m_type);
-
+			std::snprintf(buf, sizeof(buf), indexFormat, w.m_addressIndex, "", w.m_addressIndex, w.m_scriptHash);
+			//can't move to DrawWatchColumn, for some reason popup becomes unresponsive that way
 			if (ImGui::Selectable(buf, false, ImGuiSelectableFlags_SpanAllColumns))
 			{
 				m_selectedEntry = &w;
 				ImGui::OpenPopup("PopupEntryProperties");
 			}
+			DrawWatchRow(buf, w);
 
-			ImGui::NextColumn();
-			ImGui::Text("%s", watchTypeNames[w.m_type]); ImGui::NextColumn();
-			ImGui::Text("%s (%d)", w.m_scriptName.c_str(), w.m_scriptHash); ImGui::NextColumn();
-			ImGui::Text("%s", w.m_info.c_str()); ImGui::NextColumn();
-			ImGui::Text("%s", w.m_value.c_str()); ImGui::NextColumn();
+			int index = 0;
+			for (auto& arrayItem : w.m_arrayWatches)
+			{
+				std::string memberIndex = w.m_arrayIndexInItem > 0 ? ".f_" + std::to_string(w.m_arrayIndexInItem) : "";
+				std::snprintf(buf, sizeof(buf), indexFormat, w.m_addressIndex, "[" + std::to_string(index) + "]" + memberIndex, arrayItem.m_addressIndex, arrayItem.m_scriptHash);
+				if (ImGui::Selectable(buf, false, ImGuiSelectableFlags_SpanAllColumns))
+				{
+					m_selectedEntry = &arrayItem;
+					ImGui::OpenPopup("PopupEntryProperties");
+				}
+				DrawWatchRow(buf, arrayItem);
+				index++;
+			}
 		}
 		ImGui::Columns(1);
 		ImGui::Separator();
@@ -414,6 +560,14 @@ bool MemWatcherMod::Draw()
 
 	ShowSelectedPopup();
 	return true;
+}
+
+void MemWatcherMod::DrawWatchRow(char buf[], WatchEntry watch) {
+	ImGui::NextColumn();
+	ImGui::Text("%s", watchTypeNames[watch.m_type]); ImGui::NextColumn();
+	ImGui::Text("%s (%d)", watch.m_scriptName.c_str(), watch.m_scriptHash); ImGui::NextColumn();
+	ImGui::Text("%s", watch.m_info.c_str()); ImGui::NextColumn();
+	ImGui::Text("%s", watch.m_value.c_str()); ImGui::NextColumn();
 }
 
 bool CompareWatch(WatchEntry a, WatchEntry b)

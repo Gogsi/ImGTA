@@ -99,6 +99,8 @@ void UserSettingsManager::Load(const std::string & filename) {
 			current >> s.memWatcher.sortByName;
 		else if (line.find("memWatcher.inputHexIndex") != -1)
 			current >> s.memWatcher.inputHexIndex;
+		else if (line.find("memWatcher.saveGlobals") != -1)
+			current >> s.memWatcher.saveGlobals;
 		else if (line.find("memWatcher.displayHudInfo") != -1)
 			current >> s.memWatcher.displayHudInfo;
 		// Mission
@@ -125,6 +127,7 @@ void UserSettingsManager::Save(const std::string & filename) {
 	SaveCommon(file, s.scripts.common, "scripts.");
 	SaveCommon(file, s.playerSwitch.common, "playerSwitch.");
 	SaveCommon(file, s.syncScene.common, "syncScene.");
+	SaveCommon(file, s.memWatcher.common, "memWatcher.");
 	
 	// Area
 	file << "area.drawOffsetZ = " << s.area.drawOffsetZ << std::endl;
@@ -167,6 +170,7 @@ void UserSettingsManager::Save(const std::string & filename) {
 	file << "memWatcher.sortByName = " << s.memWatcher.sortByName << std::endl;
 	file << "memWatcher.inputHexIndex = " << s.memWatcher.inputHexIndex << std::endl;
 	file << "memWatcher.displayHudInfo = " << s.memWatcher.displayHudInfo << std::endl;
+	file << "memWatcher.saveGlobals = " << s.memWatcher.saveGlobals << std::endl;
 	// Mission
 	// Scripts
 	file << "scripts.sortByName = " << s.scripts.sortByName << std::endl;

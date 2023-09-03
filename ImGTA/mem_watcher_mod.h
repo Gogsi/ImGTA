@@ -31,6 +31,12 @@ protected:
 	void ShowAddAddress(bool isGlobal);
 	void ShowSelectedPopup();
 	void DrawMenuBar();
+	void DrawWatchRow(char buf[], WatchEntry watch);
+	void DrawWatchToScreen(WatchEntry w, int addressIndex, std::string watchText);
+	void SaveWatches();
+	void ClearSavedWatches();
+	void LoadWatches();
+	std::string GetMemWatchFilePath();
 	CommonSettings & GetCommonSettings() override { return m_settings.common; }
 
 	MemWatcherSettings m_settings;
@@ -39,12 +45,18 @@ protected:
 
 	WatchEntry *m_selectedEntry = nullptr;
 	int m_inputAddressIndex = 0;
+	int m_inputItemSizeQWORD = 0;
+	int m_inputIndexInItem = 0;
 	int m_inputType = 0;
+	int m_inputArrayItemType = 0;
 	int m_indexRange = 1;
 
 	char m_scriptNameBuf[128] = { 0 };
 	char m_watchInfoBuf[512] = { 0 };
 	char m_watchInfoModifyBuf[512] = { 0 };
+	int m_watchModifyIndexInItem = 0;
+	int m_watchModifyType = 0;
+	int m_watchModifySizeQWORD = 0;
 	std::string m_scriptName = "";
 	std::string m_watchInfo = "";
 	bool m_autoScrollDown = false;
@@ -55,6 +67,16 @@ protected:
 	bool m_inputsUpdated = false;
 	bool m_variableAlreadyWatched = false;
 	std::string m_onlineVersion = "";
+	std::string m_fileMemWatch = "Mem_Watch.json";
+	//drawing to screen
+	std::string bufferLines;
+	const int bufferLinesCount = 2;
+	int linesCount = 0;
+	float xOff = m_settings.common.inGameOffsetX;
+	float yOff = m_settings.common.inGameOffsetY;
+	float step = 0;
+	const char* strFormat = m_settings.inputHexIndex ? "%s%s (0x%x%s) %s: %s" : "%s%s (%d%s) %s: %s";
+	char watchOnScreenInfoBuf[112] = "";
 };
 
 bool CompareWatch(WatchEntry a, WatchEntry b);

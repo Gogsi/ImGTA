@@ -110,3 +110,4 @@ char* GetCallName(int callID);
 bool InitThreadBasket();
 uint64_t* GetThreadAddress(int localId, int scriptHash);
 uint64_t* GetGlobalPtr(int globalId);
+std::string GetGameVersionString();
